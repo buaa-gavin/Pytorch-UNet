@@ -6,9 +6,11 @@ import torch
 from torch.utils.data import Dataset
 import logging
 from PIL import Image
+from torchvision import transforms
+import cv2
 
 
-class BasicDataset(Dataset):
+class BasicDataset(Dataset):  # 继承并重写Dataset类
     def __init__(self, imgs_dir, masks_dir, scale=1, mask_suffix=''):
         self.imgs_dir = imgs_dir
         self.masks_dir = masks_dir
@@ -19,6 +21,7 @@ class BasicDataset(Dataset):
         self.ids = [splitext(file)[0] for file in listdir(imgs_dir)
                     if not file.startswith('.')]
         logging.info(f'Creating dataset with {len(self.ids)} examples')
+        # print(self.ids)
 
     def __len__(self):
         return len(self.ids)
@@ -44,21 +47,32 @@ class BasicDataset(Dataset):
 
     def __getitem__(self, i):
         idx = self.ids[i]
-        mask_file = glob(self.masks_dir + idx + self.mask_suffix + '.*')
+        mask_file = glob(self.masks_dir + idx + '_mask' + self.mask_suffix + '.*')
         img_file = glob(self.imgs_dir + idx + '.*')
 
         assert len(mask_file) == 1, \
             f'Either no mask or multiple masks found for the ID {idx}: {mask_file}'
         assert len(img_file) == 1, \
             f'Either no image or multiple images found for the ID {idx}: {img_file}'
+        transform = transforms.Compose([
+            transforms.Grayscale(num_output_channels=1)
+        ])
         mask = Image.open(mask_file[0])
+        if len(mask.split()) == 3:
+            mask = transform(mask)
+            # print("------")
+
         img = Image.open(img_file[0])
 
         assert img.size == mask.size, \
             f'Image and mask {idx} should be the same size, but are {img.size} and {mask.size}'
 
         img = self.preprocess(img, self.scale)
+        # print(img.shape)
         mask = self.preprocess(mask, self.scale)
+        # print(mask.shape)
+        # mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
+        # print(len(mask.split()), len(img.split()))
 
         return {
             'image': torch.from_numpy(img).type(torch.FloatTensor),
